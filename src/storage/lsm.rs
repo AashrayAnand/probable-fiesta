@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{BufReader, Write, BufRead};
 use std::{path::Path, fs::{OpenOptions, File}};
 use crate::storage::tree::*;
 use crate::kvpair::*;
@@ -19,9 +19,13 @@ impl<'a> LsmTree<'a> {
         let path_str = format!("{}.log", name);
         let log_file = Path::new(&path_str);
         if Path::exists(log_file) {
-            return LsmTree{name, log_file: OpenOptions::new().write(true).truncate(false).open(log_file).unwrap(), tree: LogSegment::new()};
+            let existing_log = OpenOptions::new().read(true).write(true).append(true).open(log_file).unwrap();
+            let tree = LsmTree{name, log_file: existing_log, tree: LogSegment::new()};
+            let (tree, restore_result) = tree.restore();
+            assert!(restore_result, "Failed to restore WAL!");
+            return tree;
         }
-        LsmTree{name, log_file: File::create(log_file).unwrap(), tree: LogSegment::new()}
+        LsmTree{name, log_file: OpenOptions::new().create(true).write(true).append(true).open(log_file).unwrap(), tree: LogSegment::new()}
     }
 
     fn log<'b>(&mut self, entry: &'b KVPair) -> bool {
@@ -29,6 +33,22 @@ impl<'a> LsmTree<'a> {
             Err(e) => {println!("failed to log {} to db {} with error {}", entry, self.name, e); false}
             Ok(_) => {println!("logged entry for {} for db {}", entry, self.name); true}
         }
+    }
+
+    fn restore(mut self) -> (LsmTree<'a>, bool) {
+        let wal_contents = BufReader::new(self.log_file).lines();
+        for line in wal_contents {
+            if let Ok(line) = line {
+                // WAL format is an append-only log of entries like below
+                // key: foo, value: bar, we can re-create segment from log
+                // by iterating these entries and applying as a sequence of writes
+                self.tree = self.tree.insert(("a", "b"));
+            }
+        }
+        let path_str = format!("{}.log", self.name);
+        let log_file = Path::new(&path_str);
+        self.log_file = OpenOptions::new().write(true).append(true).open(log_file).unwrap();
+        (self, true)
     }
 
     pub fn write<'b>(mut self, key: &'a str, value: &'a str) -> (LsmTree<'a>, bool) {
