@@ -1,12 +1,12 @@
 use std::io::Write;
-use std::{path::Path, fs::File};
-use crate::tree::*;
+use std::{path::Path, fs::{OpenOptions, File}};
+use crate::storage::tree::*;
 use crate::kvpair::*;
 
 pub struct LsmTree<'a> {
     name: &'a str,
     log_file: File,
-    pub tree: SortedSegmentTable<&'a str>
+    tree: LogSegment<&'a str>
 }
 
 impl<'a> LsmTree<'a> {
@@ -19,9 +19,9 @@ impl<'a> LsmTree<'a> {
         let path_str = format!("{}.log", name);
         let log_file = Path::new(&path_str);
         if Path::exists(log_file) {
-            return LsmTree{name, log_file: File::open(log_file).unwrap(), tree: SortedSegmentTable::new()};
+            return LsmTree{name, log_file: OpenOptions::new().write(true).truncate(false).open(log_file).unwrap(), tree: LogSegment::new()};
         }
-        LsmTree{name, log_file: File::create(log_file).unwrap(), tree: SortedSegmentTable::new()}
+        LsmTree{name, log_file: File::create(log_file).unwrap(), tree: LogSegment::new()}
     }
 
     fn log<'b>(&mut self, entry: &'b KVPair) -> bool {

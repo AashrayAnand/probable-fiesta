@@ -1,10 +1,9 @@
 #[cfg(test)]
-
-use crate::tree::SortedSegmentTable;
+use crate::storage::tree::LogSegment;
 
 #[test]
 pub fn test_bst_insert() {
-    let mut tree: SortedSegmentTable<&str> = SortedSegmentTable::new();
+    let mut tree: LogSegment<&str> = LogSegment::new();
 
     let first_ten_letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
     let mut exp_size = 0;
@@ -18,7 +17,7 @@ pub fn test_bst_insert() {
 
 #[test]
 pub fn test_bst_insert_delete() {
-    let mut tree: SortedSegmentTable<&str> = SortedSegmentTable::new();
+    let mut tree: LogSegment<&str> = LogSegment::new();
 
     let first_ten_letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
     let mut exp_size = 0;

@@ -1,18 +1,18 @@
 use std::fmt::{Debug, Display};
 use std::cmp::*;
-use crate::tree::SortedSegmentTable::*;
+use crate::storage::tree::LogSegment::*;
 
-pub enum SortedSegmentTable<T: Ord + Copy + Debug + Display> {
-    TreeNode(T, T, Box<SortedSegmentTable<T>>, Box<SortedSegmentTable<T>>),
+pub enum LogSegment<T: Ord + Copy + Debug + Display> {
+    TreeNode(T, T, Box<LogSegment<T>>, Box<LogSegment<T>>),
     Nil
 }
 
-impl<T: Ord + Copy + Debug + Display> SortedSegmentTable<T> {
-    pub fn new() -> SortedSegmentTable<T> {
+impl<T: Ord + Copy + Debug + Display> LogSegment<T> {
+    pub fn new() -> LogSegment<T> {
         Nil
     }
 
-    pub fn insert(self, pair: (T, T)) -> SortedSegmentTable<T> {
+    pub fn insert(self, pair: (T, T)) -> LogSegment<T> {
         match self {
             Nil => {
                 TreeNode(pair.0, pair.1, Box::new(Nil), Box::new(Nil))
@@ -31,7 +31,7 @@ impl<T: Ord + Copy + Debug + Display> SortedSegmentTable<T> {
         }
     }
 
-    pub fn delete(self, del_key: T) -> SortedSegmentTable<T> {
+    pub fn delete(self, del_key: T) -> LogSegment<T> {
         match self {
             Nil => {
                 self

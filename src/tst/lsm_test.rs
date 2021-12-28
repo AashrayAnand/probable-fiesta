@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::LsmTree;
+use crate::storage::lsm::LsmTree;
 
 #[test]
 pub fn test_lsm_basic() {
@@ -11,7 +11,7 @@ pub fn test_lsm_basic() {
 
     assert!(result, "Failed to write <foo, bar> to lsm");
 
-    if let Some(value) = lsm.tree.get("foo") {
+    if let Some(value) = lsm.get("foo") {
         assert!(value == "bar", "Expected bar for value of foo, actually {}", value);
     }
     else {
