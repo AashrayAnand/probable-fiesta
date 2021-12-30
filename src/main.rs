@@ -1,4 +1,4 @@
-use storage::lsm::LsmTree;
+use storage::{lsm::LsmTree};
 
 pub mod kvpair;
 pub mod operators;
@@ -18,10 +18,11 @@ pub mod tst {
 }
 
 fn main() {
-    let l = LsmTree::new("foo");
+    let k = "foo";
+    let l = LsmTree::new("x");
 
-    let (l, result) = l.write("foo", "bar");
+    let (l, result) = l.write(k, "bar");
     if result {
-        let _ = l.get("foo");
+        if let Some(v) = l.get(k) {println!("Value for {} is {}", k, v)}
     }
 }
