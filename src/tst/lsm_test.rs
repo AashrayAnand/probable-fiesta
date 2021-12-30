@@ -93,7 +93,7 @@ pub fn test_lsm_restore_from_log() {
     let (k, v) = ("foo3", "bar3");
     let (lsm, _) = lsm.write(k, v);
     
-    let (k, v) = ("fo4", "bar4");
+    let (k, v) = ("foo4", "bar4");
     let (lsm, _) = lsm.write(k, v);
 
     let (k, v) = ("foo5", "bar5");

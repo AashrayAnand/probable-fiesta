@@ -20,8 +20,8 @@ impl<T: Ord + Debug + Display> LogSegment<T> {
             TreeNode{k, v, left, right} => {
                 match pair.0.cmp(k) {
                     Ordering::Equal => *v = Some(pair.1),
-                    Ordering::Greater => {println!("adding {} {} to right", pair.0, pair.1); right.insert(pair)},
-                    Ordering::Less => {println!("adding {} {} to left", pair.0, pair.1); left.insert(pair)},
+                    Ordering::Greater => right.insert(pair),
+                    Ordering::Less => left.insert(pair),
                 }
             }
         }

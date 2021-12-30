@@ -1,9 +1,9 @@
-use std::{io::{BufReader, Write, BufRead}, path::Path, fs::{remove_file, OpenOptions, File}, borrow::Cow};
+use std::{io::{BufReader, Write, BufRead}, path::Path, fs::{remove_file, OpenOptions, File}};
 use crate::storage::tree::*;
 use crate::kvpair::*;
 
-pub struct LsmTree<'a> {
-    name: &'a str,
+pub struct LsmTree {
+    name: String,
     log_file: File,
     tree: LogSegment<String>
 }
@@ -14,19 +14,19 @@ impl LsmTree {
     if the DB already exists and we are not purging this as part of creation, conusmes
     and restores from the pre-existing WAL.
     */
-    pub fn new(name: &'static str) -> LsmTree {
+    pub fn new(name: &str) -> LsmTree {
         // Check for existing log for this DB, then we are not creating new DB and should
         // restore log to memory
         let path_str = format!("{}.log", name);
         let log_file = Path::new(&path_str);
         if Path::exists(log_file) {
             let existing_log = OpenOptions::new().read(true).write(true).append(true).open(log_file).unwrap();
-            let tree = LsmTree{name, log_file: existing_log, tree: LogSegment::new()};
+            let tree = LsmTree{name: name.to_string(), log_file: existing_log, tree: LogSegment::new()};
             let (tree, restore_result) = tree.restore();
             assert!(restore_result, "Failed to restore WAL!");
             return tree;
         }
-        LsmTree{name, log_file: OpenOptions::new().create(true).write(true).append(true).open(log_file).unwrap(), tree: LogSegment::new()}
+        LsmTree{name: name.to_string(), log_file: OpenOptions::new().create(true).write(true).append(true).open(log_file).unwrap(), tree: LogSegment::new()}
     }
 
     /*
@@ -38,9 +38,12 @@ impl LsmTree {
         let path_str = format!("{}.log", name);
         let log_file = Path::new(&path_str);
         if Path::exists(log_file) {
-            delete_wal(log_file);
+            match remove_file(log_file) {
+                Ok(()) => {},
+                Err(e) => panic!("unable to delete existing wal with error {}", e),
+            }
         }
-        LsmTree{name, log_file: OpenOptions::new().create(true).write(true).append(true).open(log_file).unwrap(), tree: LogSegment::new()}
+        LsmTree{name: name.to_string(), log_file: OpenOptions::new().create(true).write(true).append(true).open(log_file).unwrap(), tree: LogSegment::new()}
     }
 
     /*
@@ -70,7 +73,7 @@ impl LsmTree {
                 // by iterating these entries and applying as a sequence of writes
                 let mut line = line.split(' ');
                 let tuple = (line.next().unwrap().into(), line.next().unwrap().into());
-                self.tree = self.tree.insert(tuple);
+                self.tree.insert(tuple);
             }
         }
         self.log_file = new_handle;
@@ -81,7 +84,7 @@ impl LsmTree {
     Write: Appends a new entry to the latest log segment, after first preserving the
     operation to the WAL
     */
-    pub fn write(mut self, key: &'static str, value: &'static str) -> (LsmTree, bool) {
+    pub fn write(mut self, key: &str, value: &str) -> (LsmTree, bool) {
         let kvp = KVPair::new(key.into(), value.into());
         match self.log(&kvp) {
             true => {
@@ -92,7 +95,7 @@ impl LsmTree {
         }
     }
 
-    pub fn get(&self, key: &'a str) -> Option<&String> {
+    pub fn get(&self, key: &str) -> Option<&String> {
         return self.tree.get(key.to_string());
     }
 }

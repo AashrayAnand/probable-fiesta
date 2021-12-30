@@ -1,4 +1,4 @@
-use storage::{lsm::LsmTree, tree::LogSegment};
+use storage::{lsm::LsmTree};
 
 pub mod kvpair;
 pub mod operators;
@@ -19,12 +19,7 @@ pub mod tst {
 
 fn main() {
     let k = "foo";
-    let mut l = LsmTree::new("x");
-
-    {
-        let g = "asd";
-        l = LsmTree::new(g);
-    }
+    let l = LsmTree::new("x");
 
     let (l, result) = l.write(k, "bar");
     if result {
