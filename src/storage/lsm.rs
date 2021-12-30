@@ -6,7 +6,7 @@ use crate::kvpair::*;
 pub struct LsmTree<'a> {
     name: &'a str,
     log_file: File,
-    tree: LogSegment<&'a str>
+    tree: LogSegment<String>
 }
 
 impl<'a> LsmTree<'a> {
@@ -35,14 +35,14 @@ impl<'a> LsmTree<'a> {
         let kvp = KVPair::new(key, value);
         match self.log(&kvp) {
             true => {
-                self.tree = self.tree.insert((key, value));
+                self.tree.insert((key.to_string(), value.to_string()));
                 (self, true)
             },
             false => {(self, false)}
         }
     }
 
-    pub fn get(&self, key: &'a str) -> Option<&'a str> {
-        return self.tree.get(key);
+    pub fn get(&self, key: &'a str) -> Option<&String> {
+        return self.tree.get(key.to_string());
     }
 }

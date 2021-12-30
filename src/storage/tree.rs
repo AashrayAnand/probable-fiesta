@@ -2,78 +2,52 @@ use std::fmt::{Debug, Display};
 use std::cmp::*;
 use crate::storage::tree::LogSegment::*;
 
-pub enum LogSegment<T: Ord + Copy + Debug + Display> {
-    TreeNode(T, T, Box<LogSegment<T>>, Box<LogSegment<T>>),
+pub enum LogSegment<T: Ord + Debug + Display> {
+    TreeNode{k: T, v: Option<T>, left: Box<LogSegment<T>>, right: Box<LogSegment<T>>},
     Nil
 }
 
-impl<T: Ord + Copy + Debug + Display> LogSegment<T> {
+impl<T: Ord + Debug + Display> LogSegment<T> {
     pub fn new() -> LogSegment<T> {
         Nil
     }
 
-    pub fn insert(self, pair: (T, T)) -> LogSegment<T> {
+    pub fn insert(&mut self, pair: (T, T)) {
         match self {
             Nil => {
-                TreeNode(pair.0, pair.1, Box::new(Nil), Box::new(Nil))
+                *self = TreeNode { k: pair.0, v: Some(pair.1), left: Box::new(Nil), right: Box::new(Nil) };
             },
-            TreeNode(key, value, left, right) => {
-                if key > pair.0  {
-                    TreeNode(key, value, Box::new(left.insert(pair)), right)
-                }
-                else if key < pair.0 {
-                    TreeNode(key, value, left, Box::new(right.insert(pair)))
-                }
-                else {
-                    TreeNode(key, pair.1, left, right)
+            TreeNode{k, v, left, right} => {
+                match pair.0.cmp(k) {
+                    Ordering::Equal => *v = Some(pair.1),
+                    Ordering::Greater => {println!("adding {} {} to right", pair.0, pair.1); right.insert(pair)},
+                    Ordering::Less => {println!("adding {} {} to left", pair.0, pair.1); left.insert(pair)},
                 }
             }
         }
     }
 
-    pub fn delete(self, del_key: T) -> LogSegment<T> {
+    pub fn delete(&mut self, del_key: T) {
         match self {
-            Nil => {
-                self
-            },
-            TreeNode(key, value, left, right) => {
-                if key == del_key  {
-                    if let Some(right_min) = right.min() {
-                        // Intermediate node, need to swap with min of right sub
-                        // tree to maintain bst ordering property
-                        TreeNode(right_min.0, right_min.1, left, Box::new(right.delete(right_min.0)))
-                    }
-                    else if let Some(left_max) = left.max() {
-                        // Intermediate node, need to swap with min of right sub
-                        // tree to maintain bst ordering property
-                        TreeNode(left_max.0, left_max.1, Box::new(left.delete(left_max.0)), right)
-                    }
-                    else {
-                        Nil
-                    }
-                }
-                else if key > del_key {
-                    TreeNode(key, value, Box::new(left.delete(del_key)), right)
-                }
-                else {
-                    TreeNode(key, value, left, Box::new(right.delete(del_key)))
+            Nil => {},
+            TreeNode { k, v, left, right } => {
+                match del_key.cmp(k) {
+                    Ordering::Equal => *v = None,
+                    Ordering::Greater => right.delete(del_key),
+                    Ordering::Less => left.delete(del_key)
                 }
             }
         }
     }
 
-    pub fn get(&self, get_key: T) -> Option<T> {
+    pub fn get(&self, get_key: T) -> Option<&T> {
         match self {
             Nil => {None},
-            TreeNode(key, value, left, right) => {
-                if *key == get_key {
-                    Some(*value)
-                }
-                else if *key > get_key {
-                    left.get(get_key)
-                }
-                else {
-                    right.get(get_key)
+            TreeNode { k, v, left, right } => {
+                match get_key.cmp(k) {
+                    Ordering::Equal => v.as_ref(),
+                    Ordering::Greater => right.get(get_key),
+                    Ordering::Less => left.get(get_key),
                 }
             }
         }
@@ -91,39 +65,13 @@ impl<T: Ord + Copy + Debug + Display> LogSegment<T> {
             Nil => {
                 0
             }
-            TreeNode(_, _, left, right) => {
-                1 + left.size() + right.size()
-            }
-        }
-    }
-
-    fn min(&self) -> Option<(T, T)> {
-        match self {
-            Nil => {
-               None 
-            }
-            TreeNode(key, value, left, _) => {
-                match **left {
-                    Nil => {Some((*key, *value))}
-                    TreeNode(_, _, _, _) => {
-                        left.min()
-                    }
-                } 
-            }
-        }
-    }
-
-    fn max(&self) -> Option<(T, T)> {
-        match self {
-            Nil => {
-               None 
-            }
-            TreeNode(key, value, _, right) => {
-                match **right {
-                    Nil => {Some((*key, *value))},
-                    TreeNode(_, _, _, _) => {
-                        right.max()
-                    }
+            TreeNode { k: _, v, left, right } => {
+                // Values are tombstoned in place rather than being deleted from
+                // the tree, so we need to check if there a valid sum type before
+                // we increment the size count
+                match v {
+                    Some(_) => {1 + left.size() + right.size()},
+                    None => {left.size() + right.size()}
                 }
             }
         }
