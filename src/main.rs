@@ -7,6 +7,7 @@ pub mod storage {
     pub mod tree;
     pub mod lsm;
     pub mod diskseg;
+    pub mod files;
 }
 
 pub mod tst {

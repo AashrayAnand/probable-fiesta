@@ -1,5 +1,7 @@
 #[cfg(test)]
 use crate::storage::lsm::LsmTree;
+
+#[allow(unused_imports)]
 use super::tst_util::verify_key_value;
 
 #[test]
