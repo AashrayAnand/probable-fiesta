@@ -41,7 +41,7 @@ pub fn test_lsm_create_delete_existing() {
         panic!("Failed to get key value pair for key foo");
     }
 
-    let lsm_new_delete_existing = LsmTree::new_delete_existing(dbname);
+    let mut lsm_new_delete_existing = LsmTree::new_delete_existing(dbname);
 
     if let Some(_) = lsm_new_delete_existing.get("foo") {
         panic!("Failed to delete existing DB, found value for foo on new DB");
@@ -57,7 +57,7 @@ pub fn test_lsm_overwrite_value() {
     // write <foo, bar> to tree
     let result= lsm.write(k, v);
     if result {
-        verify_key_value(&lsm, k, v);
+        verify_key_value(&mut lsm, k, v);
     }
 
     // shadow v and replace original k-v pair
@@ -66,7 +66,7 @@ pub fn test_lsm_overwrite_value() {
     // write <foo, bar2> to tree, would expect to overwrite existing pair
     let result = lsm.write(k, v);
     if result {
-        verify_key_value(&lsm, k, v);
+        verify_key_value(&mut lsm, k, v);
     }
 }
 
@@ -87,10 +87,10 @@ pub fn test_lsm_restore_from_log() {
     for i in 0..6 {
         let (k, v) = (format!("foo{}", i), format!("bar{}", i));
         lsm.write(&k, &v);
-        verify_key_value(&lsm, &k, &v);
+        verify_key_value(&mut lsm, &k, &v);
     }
 }
-/*
+
 #[test]
 pub fn test_lsm_get_tuples_from_old_segments() {
     /*
@@ -108,16 +108,29 @@ pub fn test_lsm_get_tuples_from_old_segments() {
     while lsm.total_segments() == 0 {
         let (k, v) = (format!("foo{}", i), format!("bar{}", i));
         lsm.write(&k, &v);
-        verify_key_value(&lsm, &k, &v);
+        verify_key_value(&mut lsm, &k, &v);
         i += 1;
     }
 
     // We flush the in-memory segment lazily, so append one more key to force this
     let (k, v) = (format!("foo{}", i), format!("bar{}", i));
     lsm.write(&k, &v);
-    verify_key_value(&lsm, &k, &v);
-    
+    verify_key_value(&mut lsm, &k, &v);
+
+    let mut i = 0;
+
+    let ex_segments = 1;
+    assert!(lsm.total_segments() == ex_segments, "expected {} disk segments, actually {}", ex_segments, lsm.total_segments());
+
+    // Check all of the keys which are now in an old segment
+    while lsm.total_segments() == 0 {
+        let (k, v) = (format!("foo{}", i), format!("bar{}", i));
+        verify_key_value(&mut lsm, &k, &v);
+        i += 1;
+    }
 }
+
+/* 
 
 #[test]
 pub fn test_lsm_verify_reclaim_old_segments() {
@@ -132,4 +145,4 @@ pub fn test_lsm_verify_reclaim_old_segments() {
     while lsm.total_segments() == 0 {
 
     }
-}*/
+} */

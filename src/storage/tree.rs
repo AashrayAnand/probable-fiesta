@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Display};
-use std::cmp::*;
+use std::{cmp::*};
+use std::fs::File;
+use std::io::{Write};
 use crate::storage::tree::LogSegment::*;
 
 pub enum LogSegment<T: Ord + Debug + Display> {
@@ -49,6 +51,29 @@ impl<T: Ord + Debug + Display> LogSegment<T> {
                     Ordering::Greater => right.get(get_key),
                     Ordering::Less => left.get(get_key),
                 }
+            }
+        }
+    }
+
+    // in-order traversal and write to disk of the tree.
+    pub fn write_to_disk(&mut self, file: &mut File) {
+        match self {
+            Nil => {},
+            TreeNode { k, v, left, right } => {
+                left.write_to_disk(file);
+
+                if let Some(v) = v {
+                    if let Err(e) = file.write(format!("{} {}\n", k, v).as_bytes()) {
+                        panic!("{}", e);
+                    }
+                }
+                else {
+                    // Tombstoned entries will be written to disk as keys only
+                    if let Err(e) = file.write(format!("{}\n", k).as_bytes()) {
+                        panic!("{}", e);
+                    }
+                }
+                right.write_to_disk(file);
             }
         }
     }

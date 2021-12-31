@@ -2,12 +2,16 @@ use std::{io::{BufReader, BufRead, Write}, fs::File};
 use crate::storage::tree::*;
 use crate::kvpair::*;
 
-use crate::storage::{diskseg::DiskSegment::{self}, files::*};
+use crate::storage::{diskseg::DiskSegment::{self, *}, files::*};
+
+const MAX_TREE_SIZE: usize = 100;
 
 pub struct LsmTree {
     name: String,
     log_file: File,
     tree: LogSegment<String>,
+    max_tree_size: usize,
+    waiting_to_flush: bool,
     log_segments: Vec<DiskSegment>,
 }
 
@@ -22,9 +26,11 @@ impl LsmTree {
         if lsm_exists(name) {
             let existing_log = get_wal(name, false);
             let mut tree = LsmTree{
-                name: name.to_string(), 
-                log_file: existing_log, 
-                tree: LogSegment::new(), 
+                name: name.to_string(),
+                log_file: existing_log,
+                tree: LogSegment::new(),
+                max_tree_size: MAX_TREE_SIZE,
+                waiting_to_flush: false,
                 log_segments: reclaim_segments(name)};
             let restore_result = tree.restore();
             assert!(restore_result, "Failed to restore WAL!");
@@ -38,9 +44,11 @@ impl LsmTree {
         }
 
         LsmTree{
-            name: name.to_string(), 
-            log_file: get_wal(name, true), 
-            tree: LogSegment::new(), 
+            name: name.to_string(),
+            log_file: get_wal(name, true),
+            tree: LogSegment::new(),
+            max_tree_size: MAX_TREE_SIZE,
+            waiting_to_flush: false,
             log_segments: reclaim_segments(name)}
     }
 
@@ -63,7 +71,7 @@ impl LsmTree {
     */
     fn log(&mut self, entry: &KVPair) -> bool {
         match self.log_file.write(format!("{} {}\n", entry.key, entry.value).as_bytes()) {
-            Err(e) => {println!("failed to log {} to db {} with error {}", entry, self.name, e); false}
+            Err(e) => {println!("failed to log {} to wal for db {} with error {}", entry, self.name, e); false}
             Ok(_) => {println!("logged entry for {} for db {}", entry, self.name); true}
         }
     }
@@ -94,11 +102,45 @@ impl LsmTree {
     }
 
     /*
+    Write Tree: Writes current tree to new disk segment. Note that flushing the in-memory
+    tree is lazy, so we can read this tree until another write occurs
+    */
+    fn write_tree(&mut self) {
+        let total_segments = self.total_segments();
+        let mut segment_buf = get_segment(&self.name, total_segments, true);
+        self.tree.write_to_disk(&mut segment_buf);
+        self.log_segments.push(ClosedSegment{path_s: String::from("asd"), file: segment_buf});
+        self.waiting_to_flush = true;
+    }
+
+    /*
+    Flush Tree: Flushes the in-memory log segment, replacing with empty tree for future writes
+    */
+    fn flush_tree(&mut self) {
+        // If we have previously written the in-memory tree to disk, we
+        // must first flush from memory before appending new entry
+        self.tree = LogSegment::new();
+        self.waiting_to_flush = false;
+    }
+
+    /*
     Get: Queries LSM for value for the given key, will traverse log segments in newest
     to oldest fashion to preverse append-only deletion semantics
     */
-    pub fn get(&self, key: &str) -> Option<&String> {
-        return self.tree.get(key.to_string());
+    pub fn get(&mut self, key: &str) -> Option<&String> {
+        let result = self.tree.get(key.to_string());
+
+        // If the key is not already in memory, traverse prior log
+        // segments in newest-to-oldest order until we get a result
+        if let None = result {
+            for segment in &mut self.log_segments {
+                let tree = get_tree_from_segment(segment);
+                if let Some(result) = tree.get(key.to_string()) {
+                    return Some(result);
+                }
+            }
+        }
+        result
     }
 
     /*
@@ -106,6 +148,14 @@ impl LsmTree {
     operation to the WAL
     */
     pub fn write(&mut self, key: &str, value: &str) -> bool {
+        if self.tree.size() == self.max_tree_size {
+            if self.waiting_to_flush {
+                self.flush_tree();
+            }
+            else {
+                self.write_tree();
+            }
+        }
         let kvp = KVPair::new(key.into(), value.into());
         match self.log(&kvp) {
             true => {
@@ -122,4 +172,33 @@ impl LsmTree {
     pub fn total_segments(&self) -> usize {
         self.log_segments.len()
     }
+}
+
+fn get_tree_from_segment(segment: &mut DiskSegment) -> &LogSegment<String> {
+    match segment {
+        OpenSegment{path_s: _, file: _, tree} => {tree},
+        ClosedSegment{path_s, file} => {
+            let tree = open_segment(file);
+            *segment = OpenSegment{path_s: path_s.to_string(), file: file.try_clone().unwrap(), tree: tree};
+            if let OpenSegment { path_s: _, file: _, tree } = segment {
+                tree
+            }
+            else {
+                panic!("Failed to open disk segment");
+            }
+        }
+    }
+}
+
+fn open_segment(file: &mut File) -> LogSegment<String> {
+    let mut root = LogSegment::new();
+    for line in BufReader::new(file).lines() {
+        if let Ok(line) = line {
+            let mut tuple = line.split(" ");
+            let key = tuple.next().unwrap();
+            let value = tuple.next().unwrap();
+            root.insert((key.to_string(), value.to_string()));
+        }
+    }
+    root
 }
