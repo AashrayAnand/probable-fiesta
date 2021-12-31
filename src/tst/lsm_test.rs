@@ -1,24 +1,15 @@
-use crate::storage::lsm::LsmTree;
 #[cfg(test)]
-
-pub fn verify_key_value(tree: &LsmTree, k: &'static str, v: &'static str) {
-    if let Some(value) = tree.get(k) {
-        println!("got value {} for key {}", value, k);
-        assert!(v == value, "invalid key, expected {}, actually {}", v, value);
-    }
-    else {
-        panic!("No value found for key {}", k);
-    }
-}
+use crate::storage::lsm::LsmTree;
+use super::tst_util::verify_key_value;
 
 #[test]
 pub fn test_lsm_basic() {
     let dbname = "test_lsm_basic";
-    let lsm = LsmTree::new_delete_existing(dbname);
+    let mut lsm = LsmTree::new_delete_existing(dbname);
     let (k, v) = ("foo", "bar");
 
     // write <foo, bar> to tree
-    let (lsm, result) = lsm.write(k, v);
+    let result = lsm.write(k, v);
 
     assert!(result, "Failed to write <foo, bar> to lsm");
 
@@ -33,11 +24,11 @@ pub fn test_lsm_basic() {
 #[test]
 pub fn test_lsm_create_delete_existing() {
     let dbname = "test_lsm_create_and_delete";
-    let lsm = LsmTree::new_delete_existing(dbname);
+    let mut lsm = LsmTree::new_delete_existing(dbname);
     let (k, v) = ("foo", "bar");
 
     // write <foo, bar> to tree
-    let (lsm, result) = lsm.write(k, v);
+    let result= lsm.write(k, v);
 
     assert!(result, "Failed to write <foo, bar> to lsm");
 
@@ -58,11 +49,11 @@ pub fn test_lsm_create_delete_existing() {
 #[test]
 pub fn test_lsm_overwrite_value() {
     let dbname = "test_lsm_overwrite_value";
-    let lsm = LsmTree::new_delete_existing(dbname);
+    let mut lsm = LsmTree::new_delete_existing(dbname);
     let (k, v) = ("foo", "bar");
 
     // write <foo, bar> to tree
-    let (lsm, result) = lsm.write(k, v);
+    let result= lsm.write(k, v);
     if result {
         verify_key_value(&lsm, k, v);
     }
@@ -71,7 +62,7 @@ pub fn test_lsm_overwrite_value() {
     let v = "bar2";
 
     // write <foo, bar2> to tree, would expect to overwrite existing pair
-    let (lsm, result) = lsm.write(k, v);
+    let result = lsm.write(k, v);
     if result {
         verify_key_value(&lsm, k, v);
     }
@@ -79,35 +70,64 @@ pub fn test_lsm_overwrite_value() {
 
 #[test]
 pub fn test_lsm_restore_from_log() {
-    let lsm = LsmTree::new_delete_existing("test_lsm_restore_from_log");
+    let mut lsm = LsmTree::new_delete_existing("test_lsm_restore_from_log");
 
-    let (k, v) = ("foo", "bar");
-    let (lsm, _) = lsm.write(k, v);
-
-    let (k, v) = ("foo1", "bar1");
-    let (lsm, _) = lsm.write(k, v);
-    
-    let (k, v) = ("foo2", "bar2");
-    let (lsm, _) = lsm.write(k, v);
-
-    let (k, v) = ("foo3", "bar3");
-    let (lsm, _) = lsm.write(k, v);
-    
-    let (k, v) = ("foo4", "bar4");
-    let (lsm, _) = lsm.write(k, v);
-
-    let (k, v) = ("foo5", "bar5");
-    let (_, _) = lsm.write(k, v);
+    for i in 0..6 {
+        let (k, v) = (format!("foo{}", i), format!("bar{}", i));
+        lsm.write(&k, &v);
+    }
 
     // shadowing lsm with same DB name is equivalent to re-starting process and
     // spinning up an existing DB, internally, it should result in restoring from
     // the existing lo (test_lsm_restore_from_log.log), rather than creating a fresh LSM
-    let lsm = LsmTree::new("test_lsm_restore_from_log");
+    let mut lsm = LsmTree::new("test_lsm_restore_from_log");
 
-    verify_key_value(&lsm, "foo", "bar");
-    verify_key_value(&lsm, "foo1", "bar1");
-    verify_key_value(&lsm, "foo2", "bar2");
-    verify_key_value(&lsm, "foo3", "bar3");
-    verify_key_value(&lsm, "foo4", "bar4");
-    verify_key_value(&lsm, "foo5", "bar5");
+    for i in 0..6 {
+        let (k, v) = (format!("foo{}", i), format!("bar{}", i));
+        lsm.write(&k, &v);
+        verify_key_value(&lsm, &k, &v);
+    }
 }
+/*
+#[test]
+pub fn test_lsm_get_tuples_from_old_segments() {
+    /*
+    The goal of this test is to validate the enhancements made to persist full log segments to disk.
+    We would expect that any tuples on an old log segment would be found were we to try to get these,
+    and also that we preserve the append-only log approach, where log segments are traversed in newest
+    to oldest order (with no duplicates in a segment), meaning the latest value for a particular key
+    is what is respected, as opposed values for the same key in older segments
+    */
+
+    let mut lsm = LsmTree::new_delete_existing("test_lsm_get_tuples_from_old_segments");
+    let mut i = 0;
+
+    // Keep appending to the lsm until we persist the current log 
+    while lsm.total_segments() == 0 {
+        let (k, v) = (format!("foo{}", i), format!("bar{}", i));
+        lsm.write(&k, &v);
+        verify_key_value(&lsm, &k, &v);
+        i += 1;
+    }
+
+    // We flush the in-memory segment lazily, so append one more key to force this
+    let (k, v) = (format!("foo{}", i), format!("bar{}", i));
+    lsm.write(&k, &v);
+    verify_key_value(&lsm, &k, &v);
+    
+}
+
+#[test]
+pub fn test_lsm_verify_reclaim_old_segments() {
+    /*
+    The goal of this test is to verify, for an existing LSM which had previously persisted some log segments
+    to disk, that we reclaim all existing log segments on re-start
+    */
+
+    let lsm = LsmTree::new_delete_existing("test_lsm_verify_reclaim_old_segments");
+
+    // Keep appending to the lsm until we persist the current log segment
+    while lsm.total_segments() == 0 {
+
+    }
+}*/

@@ -2,11 +2,11 @@ use storage::{lsm::LsmTree};
 
 pub mod kvpair;
 pub mod operators;
-pub mod config;
 
 pub mod storage {
     pub mod tree;
     pub mod lsm;
+    pub mod diskseg;
 }
 
 pub mod tst {
@@ -14,14 +14,14 @@ pub mod tst {
     // https://stackoverflow.com/questions/58935890/how-to-import-from-a-file-in-a-subfolder-of-src
     pub mod bst_test;
     pub mod lsm_test;
-    pub mod operators_test;
+    pub mod tst_util;
 }
 
 fn main() {
     let k = "foo";
-    let l = LsmTree::new("x");
+    let mut l = LsmTree::new("x");
 
-    let (l, result) = l.write(k, "bar");
+    let result= l.write(k, "bar");
     if result {
         if let Some(v) = l.get(k) {println!("Value for {} is {}", k, v)}
     }
