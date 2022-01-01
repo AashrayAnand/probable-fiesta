@@ -26,4 +26,6 @@ fn main() {
     if result {
         if let Some(v) = l.get(k) {println!("Value for {} is {}", k, v)}
     }
+
+    //let mux: Mutex<LogSegment<String>> = Mutex::new(LogSegment::new());
 }

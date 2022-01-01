@@ -1,8 +1,8 @@
-use std::{io::{BufReader, BufRead, Write}, fs::File};
+use std::{io::{Lines, Result, BufReader, BufRead, Write}, fs::File, path::Path};
 use crate::storage::tree::*;
 use crate::kvpair::*;
 
-use crate::storage::{diskseg::DiskSegment::{self, *}, files::*};
+use crate::storage::{diskseg::{extract_seg_id, DiskSegment::{self, *}}, files::*};
 
 const MAX_TREE_SIZE: usize = 100;
 
@@ -11,7 +11,6 @@ pub struct LsmTree {
     log_file: File,
     tree: LogSegment<String>,
     max_tree_size: usize,
-    waiting_to_flush: bool,
     log_segments: Vec<DiskSegment>,
 }
 
@@ -30,7 +29,6 @@ impl LsmTree {
                 log_file: existing_log,
                 tree: LogSegment::new(),
                 max_tree_size: MAX_TREE_SIZE,
-                waiting_to_flush: false,
                 log_segments: reclaim_segments(name)};
             let restore_result = tree.restore();
             assert!(restore_result, "Failed to restore WAL!");
@@ -48,7 +46,6 @@ impl LsmTree {
             log_file: get_wal(name, true),
             tree: LogSegment::new(),
             max_tree_size: MAX_TREE_SIZE,
-            waiting_to_flush: false,
             log_segments: reclaim_segments(name)}
     }
 
@@ -102,25 +99,28 @@ impl LsmTree {
     }
 
     /*
-    Write Tree: Writes current tree to new disk segment. Note that flushing the in-memory
+    Flushes Tree: Flushes current tree to new disk segment. Note that flushing the in-memory
     tree is lazy, so we can read this tree until another write occurs
     */
-    fn write_tree(&mut self) {
+    fn flush_tree(&mut self) {
         let total_segments = self.total_segments();
         let mut segment_buf = get_segment(&self.name, total_segments, true);
         self.tree.write_to_disk(&mut segment_buf);
-        self.log_segments.push(ClosedSegment{path_s: String::from("asd"), file: segment_buf});
-        self.waiting_to_flush = true;
+        let new_seg = ClosedSegment{path_s: get_seg_path_s(&self.name, total_segments), file: segment_buf};
+        match self.log_segments.binary_search(&new_seg) {
+            // Place log segments in order by name
+            Err(pos) => self.log_segments.insert(pos, new_seg),
+            _ => {},
+        }
+        self.tree = LogSegment::new();
     }
 
-    /*
-    Flush Tree: Flushes the in-memory log segment, replacing with empty tree for future writes
-    */
-    fn flush_tree(&mut self) {
-        // If we have previously written the in-memory tree to disk, we
-        // must first flush from memory before appending new entry
-        self.tree = LogSegment::new();
-        self.waiting_to_flush = false;
+    pub fn num_entries(&self) -> usize {
+        self.tree.size()
+    }
+
+    pub fn max_entries(&self) -> usize {
+        self.max_tree_size
     }
 
     /*
@@ -134,7 +134,9 @@ impl LsmTree {
         // segments in newest-to-oldest order until we get a result
         if let None = result {
             for segment in &mut self.log_segments {
+                println!("Checking for {} in segment {}", key, extract_seg_id(segment.value().to_string()));
                 let tree = get_tree_from_segment(segment);
+
                 if let Some(result) = tree.get(key.to_string()) {
                     return Some(result);
                 }
@@ -148,17 +150,14 @@ impl LsmTree {
     operation to the WAL
     */
     pub fn write(&mut self, key: &str, value: &str) -> bool {
-        if self.tree.size() == self.max_tree_size {
-            if self.waiting_to_flush {
+        if self.num_entries() >= self.max_tree_size {
                 self.flush_tree();
-            }
-            else {
-                self.write_tree();
-            }
         }
+
         let kvp = KVPair::new(key.into(), value.into());
         match self.log(&kvp) {
             true => {
+                println!("Adding in {} {}", key, value);
                 self.tree.insert((key.to_string(), value.to_string()));
                 true
             },
@@ -178,7 +177,7 @@ fn get_tree_from_segment(segment: &mut DiskSegment) -> &LogSegment<String> {
     match segment {
         OpenSegment{path_s: _, file: _, tree} => {tree},
         ClosedSegment{path_s, file} => {
-            let tree = open_segment(file);
+            let tree = read_segment(Path::new(path_s));
             *segment = OpenSegment{path_s: path_s.to_string(), file: file.try_clone().unwrap(), tree: tree};
             if let OpenSegment { path_s: _, file: _, tree } = segment {
                 tree
@@ -190,15 +189,25 @@ fn get_tree_from_segment(segment: &mut DiskSegment) -> &LogSegment<String> {
     }
 }
 
-fn open_segment(file: &mut File) -> LogSegment<String> {
+fn read_segment<P: AsRef<Path>>(path: P) -> LogSegment<String> {
     let mut root = LogSegment::new();
-    for line in BufReader::new(file).lines() {
-        if let Ok(line) = line {
-            let mut tuple = line.split(" ");
-            let key = tuple.next().unwrap();
-            let value = tuple.next().unwrap();
-            root.insert((key.to_string(), value.to_string()));
+    if let Ok(lines) = read_lines(path) {
+        for line in lines {
+            if let Ok(line) = line {
+                let mut tuple = line.split(" ");
+                let key = tuple.next().unwrap();
+                let value = tuple.next().unwrap();
+                root.insert((key.to_string(), value.to_string()));
+            }
         }
     }
     root
+}
+
+// Generic read lines helper, returns a Result which on success is an iterator over
+// the lines of a BufReader, where the BufReader consumes the result of opening file
+pub fn read_lines<P: AsRef<Path>>(path: P) -> Result<Lines<BufReader<File>>>
+{
+    let input = File::open(path).expect("Unable to open up input file");
+    Ok(BufReader::new(input).lines())
 }

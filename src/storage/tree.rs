@@ -4,12 +4,12 @@ use std::fs::File;
 use std::io::{Write};
 use crate::storage::tree::LogSegment::*;
 
-pub enum LogSegment<T: Ord + Debug + Display> {
+pub enum LogSegment<T: Ord + Clone + Debug + Display> {
     TreeNode{k: T, v: Option<T>, left: Box<LogSegment<T>>, right: Box<LogSegment<T>>},
     Nil
 }
 
-impl<T: Ord + Debug + Display> LogSegment<T> {
+impl<T: Ord + Clone + Debug + Display> LogSegment<T> {
     pub fn new() -> LogSegment<T> {
         Nil
     }

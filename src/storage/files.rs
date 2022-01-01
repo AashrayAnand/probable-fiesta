@@ -19,12 +19,24 @@ pub fn get_wal(name: &str, create: bool) -> File {
     }
 }
 
-pub fn get_segment(name: &str, seg_num: usize, create: bool) -> File {
+pub fn get_seg_path(name: &str, seg_num: usize) -> PathBuf {
     // Check for existing log for this DB, then we are not creating new DB and should
     // restore log to memory
     let path_str = format!("segment_{}.{}", seg_num, LOG_EXT);
     let seg_path = Path::new(&path_str);
-    let full_file_path = get_lsmdir(name).join(seg_path);
+    get_lsmdir(name).join(seg_path)
+}
+
+pub fn get_seg_path_s(name: &str, seg_num: usize) -> String {
+    // Check for existing log for this DB, then we are not creating new DB and should
+    // restore log to memory
+    let path_str = format!("segment_{}.{}", seg_num, LOG_EXT);
+    let seg_path = Path::new(&path_str);
+    get_lsmdir(name).join(seg_path).to_str().unwrap().to_string()
+}
+
+pub fn get_segment(name: &str, seg_num: usize, create: bool) -> File {
+    let full_file_path = get_seg_path(name, seg_num);
     println!("Creating segment file {:?}", full_file_path.as_os_str());
     if create {
         OpenOptions::new().create(true).write(true).append(true).open(full_file_path).unwrap()
