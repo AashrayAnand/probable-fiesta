@@ -28,9 +28,10 @@ pub fn test_bst_insert_delete() {
         assert!(tree.exists(first_ten_letters[i].to_string()), "The letter {} doesn't exist in the tree after insert", first_ten_letters[i]);
     }
 
+    let exp_size = tree.size();
+
     for i in 0..first_ten_letters.len() {
         tree.delete(first_ten_letters[i].to_string());
-        exp_size -= 1;
         assert!(tree.size() == exp_size, "Expected tree size {}, actually is {}", exp_size, tree.size());
         assert!(!tree.exists(first_ten_letters[i].to_string()), "The letter {} exists in the tree after delete", first_ten_letters[i]);
     }
