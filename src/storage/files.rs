@@ -1,4 +1,6 @@
 use std::{fs::{create_dir, read_dir, remove_file, metadata, OpenOptions, File, remove_dir}, path::{PathBuf, Path}, env::current_dir};
+use crate::log;
+
 use super::diskseg::DiskSegment::{self, *};
 
 pub const LOG_EXT: &str = "log";
@@ -10,7 +12,7 @@ pub fn get_wal(name: &str, create: bool) -> File {
     let path_str = format!("{}.{}", name, LOG_EXT);
     let log_file = Path::new(&path_str);
     let full_file_path = get_lsmdir(name).join(log_file);
-    println!("{:?}", full_file_path.as_os_str());
+    log(&format!("{:?}", full_file_path.as_os_str()));
     if create {
         OpenOptions::new().create(true).write(true).append(true).open(full_file_path).unwrap()
     }
@@ -37,7 +39,7 @@ pub fn get_seg_path_s(name: &str, seg_num: usize) -> String {
 
 pub fn get_segment(name: &str, seg_num: usize, create: bool) -> File {
     let full_file_path = get_seg_path(name, seg_num);
-    println!("Creating segment file {:?}", full_file_path.as_os_str());
+    log(&format!("Creating segment file {:?}", full_file_path.as_os_str()));
     if create {
         OpenOptions::new().create(true).write(true).append(true).open(full_file_path).unwrap()
     }

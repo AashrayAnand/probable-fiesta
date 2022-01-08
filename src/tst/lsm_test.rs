@@ -1,5 +1,9 @@
+use crate::log;
 #[cfg(test)]
 use crate::storage::lsm::LsmTree;
+
+#[allow(unused_imports)]
+use crate::tst::tst_util::verify_deleted;
 
 #[allow(unused_imports)]
 use super::tst_util::verify_key_value;
@@ -15,13 +19,30 @@ pub fn test_lsm_basic() {
 
     assert!(result, "Failed to write <foo, bar> to lsm");
 
-    if let Some(value) = lsm.get(k) {
-        assert!(value == v, "Expected {} for value of {}, actually {}", v, k, value);
-    }
-    else {
-        panic!("Failed to get key value pair for key foo");
-    }
+    verify_key_value(&mut lsm, k, v);
 }
+
+#[test]
+pub fn test_lsm_delete() {
+    let dbname = "test_lsm_delete";
+    let mut lsm = LsmTree::new_delete_existing(dbname);
+    let (k, v) = ("foo", "bar");
+
+    // write <foo, bar> to tree
+    let result = lsm.write(k, v);
+
+    assert!(result, "Failed to write <foo, bar> to lsm");
+
+    verify_key_value(&mut lsm, k, v);
+    
+    // write <foo, bar> to tree
+    let result = lsm.delete(k);
+
+    assert!(result, "Failed to delete foo");
+
+    verify_deleted(&mut lsm, k);
+}
+
 
 #[test]
 pub fn test_lsm_create_delete_existing() {
@@ -152,14 +173,12 @@ pub fn test_lsm_verify_reclaim_old_segments() {
     while lsm.total_segments() == 1 {
         let (k, v) = (format!("foo{}", i), format!("zar{}", i));
         lsm.write(&k, &v);
-        verify_key_value(&mut lsm, &k, &v);
         i += 1;
     }
 
     // We flush the in-memory segment lazily, so append one more key to force this
     let (k, v) = (format!("foo{}", i), format!("zar{}", i));
     lsm.write(&k, &v);
-    verify_key_value(&mut lsm, &k, &v);
 
     let ex_segments = 2;
     let ex_tree_size = 2;
@@ -174,7 +193,7 @@ pub fn test_lsm_verify_reclaim_old_segments() {
         verify_key_value(&mut lsm, &k, &v);
     }
 }
-/* 
+
 #[test]
 pub fn test_lsm_tombstone_existing_value() {
     /*
@@ -195,39 +214,24 @@ pub fn test_lsm_tombstone_existing_value() {
         i += 1;
     }
 
-    // We flush the in-memory segment lazily, so append one more key to force this
-    let (k, v) = (format!("foo{}", i), format!("bar{}", i));
-    lsm.write(&k, &v);
-    verify_key_value(&mut lsm, &k, &v);
-
-    let mut i = 0;
-
-    // Replace all keys from above with new values
-    while lsm.total_segments() == 1 {
-        let (k, v) = (format!("foo{}", i), format!("zar{}", i));
-        lsm.write(&k, &v);
-        verify_key_value(&mut lsm, &k, &v);
-        i += 1;
+    // Delete all keys from above
+   for j in 0..i {
+        let k = format!("foo{}", j);
+        lsm.delete(&k);
+        log(&format!("Verifying {} is deleted", k));
+        verify_deleted(&mut lsm, &k);
+        log(&format!("tree size is {}", lsm.num_entries()));
     }
 
-    // We flush the in-memory segment lazily, so append one more key to force this
-    let (k, v) = (format!("foo{}", i), format!("bar{}", i));
-    lsm.write(&k, &v);
-    verify_key_value(&mut lsm, &k, &v);
-
-    let mut i = 0;
-
     let ex_segments = 2;
-    let ex_tree_size = 1;
+    let ex_tree_size = 2;
     assert!(lsm.total_segments() == ex_segments, "expected {} disk segments, actually {}", ex_segments, lsm.total_segments());
     assert!(lsm.num_entries() == ex_tree_size, "expected {} entries in tree, actually {}", ex_tree_size, lsm.num_entries());
 
-    // Check all of the keys which are now in an old segment. Note we should prioritize
-    // the newest log segment when searching for the value (values of zar*)
-    while lsm.total_segments() == 0 {
-        let (k, v) = (format!("foo{}", i), format!("zar{}", i));
-        verify_key_value(&mut lsm, &k, &v);
+    // Check all of the keys are now deleted
+    for j in 0..i {
+        let k = format!("foo{}", j);
+        verify_deleted(&mut lsm, &k);
         i += 1;
     }
 }
-*/

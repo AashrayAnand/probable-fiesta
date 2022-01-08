@@ -1,6 +1,5 @@
 use std::{io::{Lines, Result, BufReader, BufRead, Write}, fs::File, path::Path};
-use crate::storage::tree::*;
-use crate::kvpair::*;
+use crate::{storage::tree::{TriOption::*, *}, log};
 
 use crate::storage::{diskseg::{extract_seg_id, DiskSegment::{self, *}}, files::*};
 
@@ -66,10 +65,17 @@ impl LsmTree {
     Log: On each DB operation, we write ahead to log to ensure durability of all operations. This is a persisted
     log that will reflect any actions prior to mutating the in memory log segment(s)
     */
-    fn log(&mut self, entry: &KVPair) -> bool {
-        match self.log_file.write(format!("{} {}\n", entry.key, entry.value).as_bytes()) {
-            Err(e) => {println!("failed to log {} to wal for db {} with error {}", entry, self.name, e); false}
-            Ok(_) => {println!("logged entry for {} for db {}", entry, self.name); true}
+    fn log(&mut self, key: &str, value: &str) -> bool {
+        match self.log_file.write(format!("{} {}\n", key, value).as_bytes()) {
+            Err(e) => {log(&format!("failed to log ({} {}) to wal for db {} with error {}", key, value, self.name, e)); false}
+            Ok(_) => {true}
+        }
+    }
+
+    fn log_del(&mut self, key: &str) -> bool {
+        match self.log_file.write(format!("{}\n", key).as_bytes()) {
+            Err(e) => {log(&format!("failed to log delete {} to wal for db {} with error {}", key, self.name, e)); false}
+            Ok(_) => {true}
         }
     }
 
@@ -128,21 +134,25 @@ impl LsmTree {
     to oldest fashion to preverse append-only deletion semantics
     */
     pub fn get(&mut self, key: &str) -> Option<&String> {
-        let result = self.tree.get(key.to_string());
-
         // If the key is not already in memory, traverse prior log
         // segments in newest-to-oldest order until we get a result
-        if let None = result {
-            for segment in &mut self.log_segments {
-                println!("Checking for {} in segment {}", key, extract_seg_id(segment.value().to_string()));
-                let tree = get_tree_from_segment(segment);
-
-                if let Some(result) = tree.get(key.to_string()) {
-                    return Some(result);
+        match self.tree.get(key.to_string()) {
+            TriSome(result) => return Some(result),
+            Tombstoned => return None,
+            TriNone => {
+                for segment in &mut self.log_segments {
+                    log(&format!("Checking for {} in segment {}", key, extract_seg_id(segment.value().to_string())));
+                    let tree = get_tree_from_segment(segment);
+                    
+                    match tree.get(key.to_string()) {
+                        TriSome(result) => return Some(result),
+                        Tombstoned => return None,
+                        _ => {}
+                    }
                 }
+                None
             }
         }
-        result
     }
 
     /*
@@ -154,11 +164,25 @@ impl LsmTree {
                 self.flush_tree();
         }
 
-        let kvp = KVPair::new(key.into(), value.into());
-        match self.log(&kvp) {
+        match self.log(key, value) {
             true => {
-                println!("Adding in {} {}", key, value);
                 self.tree.insert((key.to_string(), value.to_string()));
+                log(&format!("Added {} {}, tree size is {}", key, value, self.num_entries()));
+                true
+            },
+            false => {false}
+        }
+    }
+
+    pub fn delete(&mut self, key: &str) -> bool {
+        if self.num_entries() >= self.max_tree_size {
+                self.flush_tree();
+        }
+
+        match self.log_del(key) {
+            true => {
+                self.tree.delete(key.to_string());
+                log(&format!("Deleted {}, tree size is {}", key, self.num_entries()));
                 true
             },
             false => {false}
@@ -196,8 +220,12 @@ fn read_segment<P: AsRef<Path>>(path: P) -> LogSegment<String> {
             if let Ok(line) = line {
                 let mut tuple = line.split(" ");
                 let key = tuple.next().unwrap();
-                let value = tuple.next().unwrap();
-                root.insert((key.to_string(), value.to_string()));
+                if let Some(value) = tuple.next() {
+                    root.insert((key.to_string(), value.to_string()));
+                }
+                else {
+                    root.delete(key.to_string());
+                }
             }
         }
     }
