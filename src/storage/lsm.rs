@@ -1,5 +1,5 @@
 use std::{io::{Lines, Result, BufReader, BufRead, Write}, fs::File, path::Path};
-use crate::{storage::tree::{TriOption::*, *}, log};
+use crate::{storage::tree::{TriOption::*, *}, log, replication::network::ReplicaContext};
 
 use crate::storage::{diskseg::{extract_seg_id, DiskSegment::{self, *}}, files::*};
 
@@ -11,6 +11,7 @@ pub struct LsmTree {
     tree: LogSegment<String>,
     max_tree_size: usize,
     log_segments: Vec<DiskSegment>,
+    replica_list: ReplicaContext,
 }
 
 impl LsmTree {
@@ -28,7 +29,8 @@ impl LsmTree {
                 log_file: existing_log,
                 tree: LogSegment::new(),
                 max_tree_size: MAX_TREE_SIZE,
-                log_segments: reclaim_segments(name)};
+                log_segments: reclaim_segments(name),
+                replica_list: ReplicaContext::new()};
             let restore_result = tree.restore();
             assert!(restore_result, "Failed to restore WAL!");
             return tree;
@@ -45,7 +47,9 @@ impl LsmTree {
             log_file: get_wal(name, true),
             tree: LogSegment::new(),
             max_tree_size: MAX_TREE_SIZE,
-            log_segments: reclaim_segments(name)}
+            log_segments: reclaim_segments(name),
+            replica_list: ReplicaContext::new()
+        }
     }
 
     /*
