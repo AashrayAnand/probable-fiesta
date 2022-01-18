@@ -149,7 +149,7 @@ pub fn test_lsm_verify_reclaim_old_segments() {
     /*
     The goal of this test is to validate the enhancements made to persist full log segments to disk.
     We would expect that any tuples that are updated reflect the value in the latest log segment,
-    and any prior values for the key are ignored
+    and any prior values for the key     are ignored
     */
     let mut lsm = LsmTree::new_delete_existing("test_lsm_verify_reclaim_old_segments");
     let mut i = 0;
