@@ -1,5 +1,5 @@
-use std::{io::{Lines, Result, BufReader, BufRead, Write}, fs::File, path::Path};
-use crate::{storage::tree::{TriOption::*, *}, log, replication::network::ReplicaContext};
+use std::{thread, io::{Lines, Result, BufReader, BufRead, Write}, fs::File, path::Path};
+use crate::{storage::tree::{TriOption::*, *}, log, replication::network::{Replica, ReplicaContext}};
 
 use crate::storage::{diskseg::{extract_seg_id, DiskSegment::{self, *}}, files::*};
 
@@ -42,14 +42,16 @@ impl LsmTree {
             panic!("{}", e);
         }
 
-        LsmTree{
+        let mut lsm = LsmTree{
             name: name.to_string(),
             log_file: get_wal(name, true),
             tree: LogSegment::new(),
             max_tree_size: MAX_TREE_SIZE,
             log_segments: reclaim_segments(name),
             replica_list: ReplicaContext::new()
-        }
+        };
+
+        lsm
     }
 
     /*

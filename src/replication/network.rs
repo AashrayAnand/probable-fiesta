@@ -45,7 +45,9 @@ impl Replica {
                 match open_tcp_stream(&sock_addr) {
                     Ok(stream) => {
                         match open_tcp_listener(&sock_addr) {
-                            Ok(listener) => Some(Replica{pid, sock_addr, stream, listener, last_sent: None, last_rcv: None}),
+                            Ok(listener) => {
+                                Some(Replica{pid, sock_addr, stream, listener, last_sent: None, last_rcv: None})
+                            }
                             Err(e) => {
                                 log(&format!("Failed to open tcp stream with error {}", e));
                                 None
@@ -76,6 +78,10 @@ impl Replica {
             Err(e) => log(&format!("Failed to write msg {:?} to {} with error {}", msg_p, self.sock_addr, e))
         }
     }
+
+    pub fn incoming(&mut self) -> std::net::Incoming {
+        self.listener.incoming()
+    }
 }
 
 fn parse_ip(ip_addr: &str, port: &str) -> Result<SocketAddr, AddrParseError> {
@@ -91,7 +97,7 @@ fn open_tcp_listener(addr: &SocketAddr) -> Result<TcpListener, std::io::Error> {
 }
 
 pub struct ReplicaContext {
-    replicas: Vec<Replica>
+    pub replicas: Vec<Replica>
 }
 
 impl ReplicaContext {

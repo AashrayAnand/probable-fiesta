@@ -5,7 +5,6 @@ use std::io::{Write};
 use crate::log;
 use crate::storage::tree::LogSegment::*;
 
-
 #[derive(Debug)]
 pub enum TriOption<T> {
     TriSome(T),
