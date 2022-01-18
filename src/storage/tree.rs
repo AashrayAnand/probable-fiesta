@@ -66,10 +66,16 @@ impl<T: Ord + Clone + Debug + Display> LogSegment<T> {
                         if let Some(right) = right {
                             right.delete(del_key);
                         }
+                        else {
+                            *right = Some(Box::new(TreeNode { k: del_key, v: Tombstoned, left: None, right: None }));
+                        }
                     },
                     Ordering::Less => {
                         if let Some(left) = left {
                             left.delete(del_key);
+                        }
+                        else {
+                            *left = Some(Box::new(TreeNode { k: del_key, v: Tombstoned, left: None, right: None }));
                         }
                     },
                 }
