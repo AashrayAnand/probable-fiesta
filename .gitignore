@@ -7,5 +7,5 @@ target/
 # More information here https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html
 Cargo.lock
 
-# Don't include any WAL in check-in
+# Don't include any WAL in checgit push --set-upstream origin log-segment-optionk-in
 *.log

@@ -1,4 +1,4 @@
-use std::{net::{SocketAddr, TcpStream, AddrParseError, TcpListener}, io::Write};
+use std::{net::{SocketAddr, TcpStream, AddrParseError}, io::Write};
 use serde::{Serialize, Deserialize, Deserializer};
 use crate::log;
 
@@ -15,7 +15,7 @@ pub enum MsgType {
 // message params. Some parameters are option-able and selectively
 // used depending on the message type
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MsgParameters {
+pub struct Message {
     source: SocketAddr,
     msg_t: MsgType,
     pid: Option<u32>,
@@ -27,13 +27,10 @@ pub struct MsgParameters {
 // cluster, includes the requisite state for:
 // 1. leader election
 // 2. socket dst. address 
-// 3. tcp stream
-// 4. state (based on most recent message to this replica)
+// 3. last sent and received messages to/from replica
 pub struct Replica {
     pid: u32,
     sock_addr: SocketAddr,
-    stream: TcpStream,
-    listener: TcpListener,
     last_sent: Option<MsgType>,
     last_rcv: Option<MsgType>
 }
@@ -42,23 +39,7 @@ impl Replica {
     pub fn new(pid: u32, ip_addr: &str, port: &str) -> Option<Replica> {
         match parse_ip(ip_addr, port) {
             Ok(sock_addr) => {
-                match open_tcp_stream(&sock_addr) {
-                    Ok(stream) => {
-                        match open_tcp_listener(&sock_addr) {
-                            Ok(listener) => {
-                                Some(Replica{pid, sock_addr, stream, listener, last_sent: None, last_rcv: None})
-                            }
-                            Err(e) => {
-                                log(&format!("Failed to open tcp stream with error {}", e));
-                                None
-                            }
-                        }
-                    },
-                    Err(e) => {
-                        log(&format!("Failed to open tcp stream with error {}", e));
-                        None
-                    }
-                }
+                Some(Replica{pid, sock_addr, last_sent: None, last_rcv: None})
             },
             Err(e) => {
                 log(&format!("Failed to open socket with error {}", e));
@@ -67,20 +48,21 @@ impl Replica {
         }
     }
 
-    pub fn send_msg(&mut self, msg_p: MsgParameters) {
+    pub fn send(&mut self, msg_p: Message) {
         let buf = serde_json::to_string(&msg_p).unwrap();
-        match self.stream.write(&buf.as_bytes()) {
-            Ok(num_written) => {
-                if num_written != buf.len() {
-                    log(&format!("Failed to write entire message, only wrote {} bytes out of {}", num_written, buf.len()));
+        match open_tcp_stream(&self.sock_addr) {
+            Ok(mut stream) => {
+                match stream.write(&buf.as_bytes()) {
+                    Ok(num_written) => {
+                        if num_written != buf.len() {
+                            log(&format!("Failed to write entire message, only wrote {} bytes out of {}", num_written, buf.len()));
+                        }
+                    }
+                    Err(e) => log(&format!("Failed to write msg {:?} to {} with error {}", msg_p, self.sock_addr, e))
                 }
-            }
-            Err(e) => log(&format!("Failed to write msg {:?} to {} with error {}", msg_p, self.sock_addr, e))
+            },
+            Err(e) => log(&format!("Failed to open tcp stream with error {}", e))
         }
-    }
-
-    pub fn incoming(&mut self) -> std::net::Incoming {
-        self.listener.incoming()
     }
 }
 
@@ -90,10 +72,6 @@ fn parse_ip(ip_addr: &str, port: &str) -> Result<SocketAddr, AddrParseError> {
 
 fn open_tcp_stream(addr: &SocketAddr) -> Result<TcpStream, std::io::Error> {
     TcpStream::connect(addr)
-}
-
-fn open_tcp_listener(addr: &SocketAddr) -> Result<TcpListener, std::io::Error> {
-    TcpListener::bind(addr)
 }
 
 pub struct ReplicaContext {

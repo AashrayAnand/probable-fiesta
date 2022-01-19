@@ -1,3 +1,4 @@
+#[cfg(test)]
 use crate::log;
 #[cfg(test)]
 use crate::storage::lsm::LsmTree;
@@ -20,6 +21,7 @@ pub fn test_lsm_basic() {
     assert!(result, "Failed to write <foo, bar> to lsm");
 
     verify_key_value(&mut lsm, k, v);
+    lsm.drop();
 }
 
 #[test]
@@ -41,6 +43,7 @@ pub fn test_lsm_delete() {
     assert!(result, "Failed to delete foo");
 
     verify_deleted(&mut lsm, k);
+    lsm.drop();
 }
 
 
@@ -67,6 +70,8 @@ pub fn test_lsm_create_delete_existing() {
     if let Some(_) = lsm_new_delete_existing.get("foo") {
         panic!("Failed to delete existing DB, found value for foo on new DB");
     }
+
+    lsm_new_delete_existing.drop();
 }
 
 #[test]
@@ -89,6 +94,8 @@ pub fn test_lsm_overwrite_value() {
     if result {
         verify_key_value(&mut lsm, k, v);
     }
+
+    lsm.drop();
 }
 
 #[test]
@@ -110,6 +117,8 @@ pub fn test_lsm_restore_from_log() {
         lsm.write(&k, &v);
         verify_key_value(&mut lsm, &k, &v);
     }
+
+    lsm.drop();
 }
 
 #[test]
@@ -142,6 +151,8 @@ pub fn test_lsm_get_tuples_from_old_segments() {
         let (k, v) = (format!("foo{}", j), format!("bar{}", j));
         verify_key_value(&mut lsm, &k, &v);
     }
+
+    lsm.drop();
 }
 
 #[test]
@@ -192,6 +203,8 @@ pub fn test_lsm_verify_reclaim_old_segments() {
         let (k, v) = (format!("foo{}", j), format!("zar{}", j));
         verify_key_value(&mut lsm, &k, &v);
     }
+
+    lsm.drop();
 }
 
 #[test]
@@ -234,4 +247,6 @@ pub fn test_lsm_tombstone_existing_value() {
         verify_deleted(&mut lsm, &k);
         i += 1;
     }
+
+    lsm.drop();
 }
