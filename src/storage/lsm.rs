@@ -1,4 +1,4 @@
-use std::{thread, io::{Lines, Result, BufReader, BufRead, Write}, fs::File, path::Path};
+use std::{io::{Lines, Result, BufReader, BufRead, Write}, fs::File, path::Path};
 use crate::{storage::tree::{TriOption::*, *}, log, replication::network::{Replica, ReplicaContext}};
 
 use crate::storage::{diskseg::{extract_seg_id, DiskSegment::{self, *}}, files::*};
@@ -42,12 +42,12 @@ impl LsmTree {
             panic!("{}", e);
         }
 
-        let mut lsm = LsmTree{
+        let lsm = LsmTree{
             name: name.to_string(),
             log_file: get_wal(name, true),
             tree: LogSegment::new(),
             max_tree_size: MAX_TREE_SIZE,
-            log_segments: reclaim_segments(name),
+            log_segments: Vec::new(),
             replica_list: ReplicaContext::new()
         };
 
@@ -65,6 +65,15 @@ impl LsmTree {
         // Once we have purged the existing LSM directory, this ctor operates
         // the same as the default ctor
         LsmTree::new(name)
+    }
+
+    /*
+    Drop: Deletes an LSM (from disk)
+    */
+    pub fn drop(&mut self) {
+        // Note: we only purge LSM directory because we are creating an LSM and deleting the
+        // existing LSM of this name, should not purge elsewhere
+        purge_lsm_dir(&self.name);
     }
 
     /*

@@ -5,6 +5,8 @@ use super::diskseg::DiskSegment::{self, *};
 
 pub const LOG_EXT: &str = "log";
 pub const DATA_EXT: &str = "data";
+pub const ROOT_DIR: &str = "/var/lib/pf";
+
 
 pub fn get_wal(name: &str, create: bool) -> File {
     // Check for existing log for this DB, then we are not creating new DB and should
@@ -127,14 +129,13 @@ pub fn create_lsm_dir(name: &str) -> Result<(), &'static str> {
 }
 
 pub fn lsm_exists(name: &str) -> bool {
-    let lsm_dir = get_lsmdir(name);
-    lsm_dir.is_dir()
+    get_lsmdir(name).is_dir()
 }
 
 pub fn get_lsmdir(name: &str) -> PathBuf {
-    get_currdir().join(Path::new(name))
+    get_rootdir().join(Path::new(name))
 }
 
-pub fn get_currdir() -> PathBuf {
-    current_dir().expect("Unable to get cwd")
+pub fn get_rootdir() -> PathBuf {
+    PathBuf::from(ROOT_DIR)
 }
