@@ -1,4 +1,4 @@
-use std::{fs::{create_dir, read_dir, remove_file, metadata, OpenOptions, File, remove_dir}, path::{PathBuf, Path}, env::current_dir};
+use std::{fs::{create_dir, read_dir, remove_file, metadata, OpenOptions, File, remove_dir}, path::{PathBuf, Path}};
 use crate::log;
 
 use super::diskseg::DiskSegment::{self, *};

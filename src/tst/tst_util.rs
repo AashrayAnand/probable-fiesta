@@ -1,4 +1,6 @@
-use crate::{storage::lsm::LsmTree, log};
+use crate::storage::lsm::LsmTree;
+use crate::log;
+
 pub fn verify_key_value(tree: &mut LsmTree, k: &str, v: &str) {
     if let Some(value) = tree.get(k) {
         assert!(v == value, "invalid key, expected {}, actually {}", v, value);
